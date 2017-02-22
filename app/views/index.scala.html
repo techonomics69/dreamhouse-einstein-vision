@@ -1,0 +1,271 @@
+@(name: String, labels: Seq[String], totalExamples: Int, models: Seq[services.MetaMind.Model])(implicit assets: AssetsFinder)
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>Dreamhouse PVS</title>
+
+        <link href="@assets.path("lib/salesforce-ux__design-system/assets/styles/salesforce-lightning-design-system.min.css")" rel="stylesheet" type="text/css"/>
+
+        <script src="@assets.path("lib/vue/dist/vue.js")"></script>
+        <script src="@assets.path("lib/vue-resource/dist/vue-resource.js")"></script>
+
+        <style>
+            #app {
+                margin-top: 70px;
+                margin-left: 20px;
+                margin-right: 20px;
+                margin-bottom: 20px;
+            }
+
+            .dropzone {
+                min-height: 250px;
+            }
+
+            .dropzone.drag {
+                background-color: green;
+            }
+
+            .dropzone.error {
+                background-color: red;
+            }
+
+            .dropzone.uploading {
+                background-color: blue;
+            }
+        </style>
+    </head>
+    <body>
+        <header class="slds-global-header_container">
+            <div class="slds-global-header slds-grid">
+                <div class="slds-global-header__item">
+                    <div class="slds-global-header__logo">
+                        <img src="@assets.path("logo.png")"/>
+                    </div>
+                </div>
+                <div class="slds-global-header__item slds-text-heading--large">
+                    Dreamhouse Predictive Vision Service
+                </div>
+                <div class="slds-global-header__item">
+                    <ul class="slds-list--horizontal slds-has-dividers--left">
+                        @if(!labels.isEmpty) {
+                            <li style="padding-right: 10px;
+                                font-weight: bold;">Labels: </li>
+                            @for(label <- labels) {
+                                <li class="slds-has-divider--right">@label</li>
+                            }
+                        }
+                    </ul>
+                </div>
+                <div class="slds-global-header__item">
+                    <span style="font-weight: bold">Total Examples:</span>  @totalExamples
+                </div>
+            </div>
+        </header>
+
+        <div id="app">
+            <div class="slds-grid slds-wrap slds-grid--pull-padded">
+                <div class="slds-p-horizontal--small slds-size--1-of-2 slds-medium-size--3-of-6 slds-large-size--6-of-12">
+                    <article id="examples_dropzone" class="dropzone slds-card slds-align--absolute-center" v-bind:class="examples_dragdrop.state">
+                        <div class="slds-card__header slds-grid"></div>
+                        <div class="slds-card__body">
+                            {{examples_dragdrop.message}}
+                        </div>
+                        <div class="slds-card__footer"></div>
+                    </article>
+                </div>
+                <div class="slds-p-horizontal--small slds-size--1-of-2 slds-medium-size--3-of-6 slds-large-size--6-of-12">
+                    <article class="slds-card">
+                        <div class="slds-card__header slds-grid">
+                            <header class="slds-media slds-media--center slds-has-flexi-truncate">
+                                <div class="slds-media__figure">
+                                    <span class="slds-icon_container slds-icon-standard-contact" title="description of icon when needed">
+                                        <svg class="slds-icon slds-icon--small" aria-hidden="true">
+                                            <use xlink:href="@assets.path("lib/salesforce-ux__design-system/assets/icons/standard-sprite/svg/symbols.svg")#carousel"></use>
+                                        </svg>
+                                    </span>
+                                </div>
+                                <div class="slds-media__body">
+                                    <h2><span class="slds-text-heading--small">Models (@models.length)</span></h2>
+                                </div>
+                            </header>
+                        </div>
+                        <div class="slds-card__body">
+                            @for(model <- models) {
+                                <div class="slds-card__body--inner">
+                                    <div class="slds-tile">
+                                        <h3 class="slds-truncate">@model.name</h3>
+                                        <div class="slds-tile__detail slds-text-body--small">
+                                            <dl class="slds-list--horizontal slds-wrap">
+                                                <dt class="slds-item--label slds-text-color--weak slds-truncate">Status:</dt>
+                                                <dd class="slds-item--detail slds-truncate">@model.status</dd>
+                                                @if(model.status == "RUNNING") {
+                                                    <dt class="slds-item--label slds-text-color--weak slds-truncate">Progress:</dt>
+                                                    <dd class="slds-item--detail slds-truncate">@{model.progress * 100}%</dd>
+                                                }
+                                                @for(failureMsg <- model.failureMsg) {
+                                                    <dt class="slds-item--label slds-text-color--weak slds-truncate">Failed:</dt>
+                                                    <dd class="slds-item--detail">@failureMsg</dd>
+                                                }
+                                            </dl>
+                                            @if(model.status == "SUCCEEDED") {
+                                                <button class="slds-button slds-button--success" v-on:click="modelId = '@model.id'">Try it!</button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="slds-card__footer">
+                            <a href="/train" class="slds-button slds-button--neutral">Train a Model</a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+            <div role="dialog" tabindex="-1" aria-labelledby="header43" class="slds-modal" v-bind:class="{'slds-fade-in-open': modelId}">
+                <div class="slds-modal__container">
+                    <div class="slds-modal__header">
+                        <button class="slds-button slds-modal__close slds-button--icon-inverse" title="Close" v-on:click="modelId = null">
+                            <svg class="slds-button__icon slds-button__icon--large" aria-hidden="true">
+                                <use xlink:href="@assets.path("lib/salesforce-ux__design-system/assets/icons/utility-sprite/svg/symbols.svg")#close"></use>
+                            </svg>
+                            <span class="slds-assistive-text">Close</span>
+                        </button>
+                        <h2 id="header43" class="slds-text-heading--medium">Upload an Image</h2>
+                    </div>
+                    <div class="slds-modal__content slds-p-around--medium">
+                        <article id="tryit_dropzone" class="dropzone slds-card slds-align--absolute-center" v-bind:class="tryit_dragdrop.state">
+                            <div class="slds-card__header slds-grid"></div>
+                            <div class="slds-card__body">
+                                {{tryit_dragdrop.message}}
+                            </div>
+                            <div class="slds-card__footer"></div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+            <div class="slds-backdrop" v-bind:class="{'slds-backdrop--open': modelId}"></div>
+        </div>
+
+        <script>
+            var app = new Vue({
+                el: '#app',
+                data: {
+                    examples_dragdrop: {
+                      state: 'ready',
+                      message: 'Drag & Drop a Directory Here'
+                    },
+                    tryit_dragdrop: {
+                      state: 'ready',
+                      message: 'Drag & Drop an Image Here'
+                    },
+                    modelId: null
+                }
+            });
+
+            function dropzoneDrag(data, e) {
+                e.preventDefault();
+                data.state = 'drag';
+            }
+
+            function dropzoneLeave(data, e) {
+                e.preventDefault();
+                data.state = 'ready';
+            }
+
+            function dropzoneDrop(data, handleItem, e) {
+                e.preventDefault();
+                data.state = 'drag';
+
+                Array.prototype.forEach.call(e.dataTransfer.items, handleItem);
+            }
+
+            var examplesDropzone = document.getElementById('examples_dropzone');
+            var tryitDropzone = document.getElementById('tryit_dropzone');
+
+            examplesDropzone.addEventListener('dragover', function(e) {
+              dropzoneDrag(app.$data.examples_dragdrop, e);
+            });
+            tryitDropzone.addEventListener('dragover', function(e) {
+                dropzoneDrag(app.$data.tryit_dragdrop, e);
+            });
+
+            examplesDropzone.addEventListener('dragout', function(e) {
+                dropzoneLeave(app.$data.examples_dragdrop, e);
+            });
+            tryitDropzone.addEventListener('dragout', function(e) {
+                dropzoneLeave(app.$data.tryit_dragdrop, e);
+            });
+
+            examplesDropzone.addEventListener('drop', function(e) {
+                dropzoneDrop(app.$data.examples_dragdrop,  function(item) {
+                    var entry = item.webkitGetAsEntry();
+                    if (entry.isFile) {
+                        app.$data.examples_dragdrop.state = 'error';
+                        app.$data.examples_dragdrop.message = 'You can only drag and drop directories';
+                    }
+                    else if (entry.isDirectory) {
+                        app.$data.examples_dragdrop.state = 'uploading';
+                        app.$data.examples_dragdrop.message = 'Uploading...';
+
+                        var labelName = entry.name;
+                        var reader = entry.createReader();
+
+                        reader.readEntries(function(entries) {
+                            entries.forEach(function(fileEntry) {
+                                fileEntry.file(function(file) {
+                                    var formData = new FormData();
+                                    formData.append('label', labelName);
+                                    formData.append('filename', fileEntry.name);
+                                    formData.append('image', file);
+                                    var upload = app.$http.post('/upload', formData);
+                                    upload.then(function() {
+                                        app.$data.examples_dragdrop.state = 'uploaded';
+                                        app.$data.examples_dragdrop.message = 'Done uploading';
+                                    }, function(error) {
+                                        app.$data.examples_dragdrop.state = 'error';
+                                        app.$data.examples_dragdrop.message = 'Error uploading: ' + error;
+                                    });
+                                });
+                            });
+                        });
+                    }
+                }, e);
+            });
+
+            tryitDropzone.addEventListener('drop', function(e) {
+                dropzoneDrop(app.$data.tryit_dragdrop, function(item) {
+                    var entry = item.webkitGetAsEntry();
+                    if (entry.isFile) {
+                        app.$data.tryit_dragdrop.state = 'uploading';
+                        app.$data.tryit_dragdrop.message = 'Uploading...';
+
+                        entry.file(function(file) {
+                            var formData = new FormData();
+                            formData.append('filename', entry.name);
+                            formData.append('modelId', app.$data.modelId);
+                            formData.append('sampleContent', file);
+                            var upload = app.$http.post('/predict', formData);
+                            upload.then(function() {
+                                app.$data.tryit_dragdrop.state = 'uploaded';
+                                app.$data.tryit_dragdrop.message = 'Done uploading';
+                            }, function(error) {
+                                app.$data.tryit_dragdrop.state = 'error';
+                                app.$data.tryit_dragdrop.message = 'Error uploading: ' + error;
+                            });
+                        });
+                    }
+                    else if (entry.isDirectory) {
+                        app.$data.tryit_dragdrop.state = 'error';
+                        app.$data.tryit_dragdrop.message = 'You can only drag and drop a single image';
+                    }
+                }, e);
+            });
+
+        </script>
+    </body>
+</html>

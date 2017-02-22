@@ -1,0 +1,9 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+GET     /                                controllers.Application.index
+POST    /upload                          controllers.Application.upload
+GET     /train                           controllers.Application.train
+POST    /predict                         controllers.Application.predict
+GET     /assets/*file                    controllers.AssetsBuilder.versioned(file)
