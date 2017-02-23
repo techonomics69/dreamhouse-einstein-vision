@@ -113,7 +113,7 @@
                                                 }
                                             </dl>
                                             @if(model.status == "SUCCEEDED") {
-                                                <button class="slds-button slds-button--success" v-on:click="modelId = '@model.id'">Try it!</button>
+                                                <button class="slds-button slds-button--success" v-on:click="tryit('@model.id')">Try it!</button>
                                             }
                                         </div>
                                     </div>
@@ -142,6 +142,12 @@
                             <div class="slds-card__header slds-grid"></div>
                             <div class="slds-card__body">
                                 {{tryit_dragdrop.message}}
+                                <dl class="slds-list--horizontal slds-wrap">
+                                    <template v-for="probability of tryit_dragdrop.probabilities">
+                                        <dt class="slds-item--label slds-text-color--weak slds-truncate">{{probability.label}}</dt>
+                                        <dd class="slds-item--detail slds-truncate">{{probability.probability}}%</dd>
+                                    </template>
+                                </dl>
                             </div>
                             <div class="slds-card__footer"></div>
                         </article>
@@ -164,6 +170,14 @@
                       message: 'Drag & Drop an Image Here'
                     },
                     modelId: null
+                },
+                methods: {
+                    tryit: function(modelId) {
+                        this.modelId = modelId;
+                        this.tryit_dragdrop.state = 'ready';
+                        this.tryit_dragdrop.message = 'Drag & Drop an Image Here';
+                        this.tryit_dragdrop.probabilities = null;
+                    }
                 }
             });
 
@@ -250,9 +264,17 @@
                             formData.append('modelId', app.$data.modelId);
                             formData.append('sampleContent', file);
                             var upload = app.$http.post('/predict', formData);
-                            upload.then(function() {
+                            upload.then(function(result) {
+                                var probabilities = result.data.probabilities.map(function(probability) {
+                                    return {
+                                        label: probability.label,
+                                        probability: Math.round(probability.probability * 100)
+                                    };
+                                });
+
                                 app.$data.tryit_dragdrop.state = 'uploaded';
-                                app.$data.tryit_dragdrop.message = 'Done uploading';
+                                app.$data.tryit_dragdrop.message = null;
+                                app.$data.tryit_dragdrop.probabilities = probabilities;
                             }, function(error) {
                                 app.$data.tryit_dragdrop.state = 'error';
                                 app.$data.tryit_dragdrop.message = 'Error uploading: ' + error;

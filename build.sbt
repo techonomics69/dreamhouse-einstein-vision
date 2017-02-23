@@ -8,6 +8,7 @@ resolvers += Resolver.jcenterRepo
 
 libraryDependencies ++= Seq(
   ws,
+  cache,
   "com.pauldijou" %% "jwt-play-json" % "0.11.0",
   "org.webjars.npm" % "vue" % "2.1.10",
   "org.webjars.npm" % "vue-resource" % "1.2.0",

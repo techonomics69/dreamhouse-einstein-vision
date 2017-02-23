@@ -4,33 +4,46 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import com.typesafe.config.ConfigFactory
+import play.api.ApplicationLoader.Context
+import play.api.cache.ehcache.EhCacheComponents
 import play.api.{Configuration, Environment, Mode}
 import play.api.http.{DefaultFileMimeTypes, HttpConfiguration}
+import play.api.inject.{ApplicationLifecycle, DefaultApplicationLifecycle}
 import play.api.libs.ws.ahc.AhcWSClient
 import services.MetaMind
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
 
 object Admin extends App {
 
   implicit val actorSystem = ActorSystem()
 
-  implicit val executionContext = actorSystem.dispatcher
+  implicit val ec = actorSystem.dispatcher
 
   implicit val materializer = ActorMaterializer()
 
-  val configuration = Configuration(ConfigFactory.load())
+  val config = Configuration(ConfigFactory.load())
 
   val wsClient = AhcWSClient()
 
-  val environment = Environment(new File("."), getClass.getClassLoader, Mode.Test)
+  val env = Environment(new File("."), getClass.getClassLoader, Mode.Test)
 
-  val httpConfiguration = HttpConfiguration.fromConfiguration(configuration, environment)
+  val httpConfiguration = HttpConfiguration.fromConfiguration(config, env)
 
   val fileMimeTypes = new DefaultFileMimeTypes(httpConfiguration.fileMimeTypes)
 
-  val metaMind = new MetaMind(configuration, wsClient, fileMimeTypes)
+  val cacheComponents = new EhCacheComponents {
+    override def environment: Environment = env
+
+    override def configuration: Configuration = config
+
+    override def applicationLifecycle: ApplicationLifecycle = new DefaultApplicationLifecycle
+
+    override implicit def executionContext: ExecutionContext = ec
+  }
+
+  val metaMind = new MetaMind(config, wsClient, fileMimeTypes, cacheComponents.defaultCacheApi.sync)
 
   try {
     if (args(0) == "delete-dataset") {

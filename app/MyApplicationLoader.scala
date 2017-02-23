@@ -1,6 +1,7 @@
 import controllers.AssetsComponents
 import play.api.{Application, ApplicationLoader, BuiltInComponentsFromContext, LoggerConfigurator}
 import play.api.ApplicationLoader.Context
+import play.api.cache.ehcache.EhCacheComponents
 import play.api.libs.ws.ahc.AhcWSComponents
 import play.api.mvc.{DefaultActionBuilder, DefaultControllerComponents, PlayBodyParsers}
 import play.api.routing.Router
@@ -14,7 +15,7 @@ class MyApplicationLoader extends ApplicationLoader {
   }
 }
 
-class MyComponents(context: Context) extends BuiltInComponentsFromContext(context) with AhcWSComponents with AssetsComponents {
+class MyComponents(context: Context) extends BuiltInComponentsFromContext(context) with AhcWSComponents with AssetsComponents with EhCacheComponents {
 
   lazy val parsers: PlayBodyParsers = PlayBodyParsers(httpConfiguration.parser, httpErrorHandler, materializer, tempFileCreator)
 
@@ -22,7 +23,7 @@ class MyComponents(context: Context) extends BuiltInComponentsFromContext(contex
 
   lazy val controllerComponents = DefaultControllerComponents(actionBuilder, parsers, messagesApi, langs, fileMimeTypes, executionContext)
 
-  lazy val metaMind = new MetaMind(context.initialConfiguration, wsClient, fileMimeTypes)(executionContext)
+  lazy val metaMind = new MetaMind(context.initialConfiguration, wsClient, fileMimeTypes, defaultCacheApi.sync)(executionContext)
 
   lazy val applicationController = new controllers.Application(metaMind, controllerComponents)(assetFinder)
   lazy val assetsBuilder = new controllers.AssetsBuilder(httpErrorHandler, assetsMetadata)

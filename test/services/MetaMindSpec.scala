@@ -10,12 +10,15 @@ import akka.util.{ByteString, Timeout}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatestplus.play.PlaySpec
+import play.api.cache.ehcache.EhCacheComponents
 import play.api.{Configuration, Environment, Mode}
 import play.api.http.{DefaultFileMimeTypes, HttpConfiguration}
+import play.api.inject.{ApplicationLifecycle, DefaultApplicationLifecycle}
 import play.api.libs.json.JsObject
 import play.api.libs.ws.ahc.AhcWSClient
 import play.api.test.Helpers._
 
+import scala.concurrent.ExecutionContext
 import scala.util.Random
 import scala.concurrent.duration._
 
@@ -23,26 +26,36 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
 
   implicit lazy val actorSystem = ActorSystem()
 
-  implicit lazy val executionContext = actorSystem.dispatcher
+  implicit lazy val ec = actorSystem.dispatcher
 
   implicit lazy val materializer = ActorMaterializer()
 
-  lazy val configuration = Configuration(ConfigFactory.load())
+  lazy val config = Configuration(ConfigFactory.load())
 
   lazy val wsClient = AhcWSClient()
 
-  lazy val environment = Environment(new File("."), getClass.getClassLoader, Mode.Test)
+  lazy val env = Environment(new File("."), getClass.getClassLoader, Mode.Test)
 
-  lazy val httpConfiguration = HttpConfiguration.fromConfiguration(configuration, environment)
+  lazy val httpConfiguration = HttpConfiguration.fromConfiguration(config, env)
 
   lazy val fileMimeTypes = new DefaultFileMimeTypes(httpConfiguration.fileMimeTypes)
 
-  lazy val metaMind = new MetaMind(configuration, wsClient, fileMimeTypes)
+
+  val cacheComponents = new EhCacheComponents {
+    override def environment: Environment = env
+
+    override def configuration: Configuration = config
+
+    override def applicationLifecycle: ApplicationLifecycle = new DefaultApplicationLifecycle
+
+    override implicit def executionContext: ExecutionContext = ec
+  }
+
+  lazy val metaMind = new MetaMind(config, wsClient, fileMimeTypes, cacheComponents.defaultCacheApi.sync)
 
   def withDataset(f: (Int) => Any): Unit = {
     val name = Random.alphanumeric.take(8).mkString
     val dataset = await(metaMind.createDataset(name))
-    println(dataset)
     val id = (dataset \ "id").as[Int]
     try {
       f(id)
@@ -57,7 +70,6 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
       val name = Random.alphanumeric.take(16).mkString
       val label = await(metaMind.createLabel(dataset, name))
       val id = (label \ "id").as[Int]
-      println(label)
       f(dataset, id)
     }
   }

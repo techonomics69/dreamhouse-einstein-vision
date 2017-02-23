@@ -66,6 +66,7 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
   */
 
   // todo: don't use temp file
+  // todo: fix race condition with multiple uploads simutansous uploads for a non-existant label
   def upload = Action(parse.multipartFormData).async { request: Request[MultipartFormData[Files.TemporaryFile]] =>
     val maybeFilename = request.body.asFormUrlEncoded.get("filename").flatMap(_.headOption)
     val maybeLabel = request.body.asFormUrlEncoded.get("label").flatMap(_.headOption)

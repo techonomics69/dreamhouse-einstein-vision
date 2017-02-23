@@ -9,6 +9,7 @@ import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtJson}
 import play.api.Configuration
+import play.api.cache.{CacheApi, SyncCacheApi}
 import play.api.http.{ContentTypes, FileMimeTypes, HeaderNames, Status}
 import play.api.libs.json.{JsArray, JsObject, JsPath, JsResult, JsResultException, JsValue, Json, JsonValidationError, Reads}
 import play.api.libs.ws.{WSClient, WSRequest, WSResponse}
@@ -17,11 +18,11 @@ import play.api.mvc.MultipartFormData.{BadPart, DataPart, FilePart, Part}
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 
-
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.util.Try
 
-class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: FileMimeTypes)(implicit executionContext: ExecutionContext) {
+class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: FileMimeTypes, cache: SyncCacheApi)(implicit executionContext: ExecutionContext) {
 
   val baseUrl = "https://api.metamind.io/v1"
 
@@ -42,7 +43,7 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
   def bearerToken: Future[String] = {
     val url = s"$baseUrl/oauth2/token"
 
-    val claim = JwtClaim(subject = Some(email), audience = Some(Set(url))).expiresIn(60)
+    val claim = JwtClaim(subject = Some(email), audience = Some(Set(url))).expiresIn(60 * 15)
     val assertion = JwtJson.encode(claim, keyPair.getPrivate, JwtAlgorithm.RS256)
 
     val params = Map(
@@ -51,7 +52,10 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
     )
 
     wsClient.url(url).post(params).flatMap(status(Status.OK)).flatMap { json =>
-      (json \ "access_token").validate[String].toFuture
+      (json \ "access_token").validate[String].toFuture.map { accessToken =>
+        cache.set("accessToken", accessToken, 10.minutes)
+        accessToken
+      }
     }
   }
 
@@ -151,8 +155,10 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
   }
 
   private def ws(path: String)(f: (WSRequest) => Future[WSResponse]): Future[WSResponse] = {
-    // todo: bearerToken caching and retry on token timeout
-    bearerToken.flatMap { bearerToken =>
+    // todo: bearerToken retry
+    val bearerTokenFuture = cache.get[String]("accessToken").fold(bearerToken)(Future.successful)
+
+    bearerTokenFuture.flatMap { bearerToken =>
       val wsRequest = wsClient.url(baseUrl + path).withHeaders(HeaderNames.AUTHORIZATION -> s"Bearer $bearerToken")
       f(wsRequest)
     }
