@@ -24,7 +24,7 @@ import scala.util.Try
 
 class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: FileMimeTypes, cache: SyncCacheApi)(implicit executionContext: ExecutionContext) {
 
-  val baseUrl = "https://api.metamind.io/v1"
+  val baseUrl = configuration.get[String]("metamind.url") + "v1"
 
   val email: String = configuration.get[String]("metamind.email")
 

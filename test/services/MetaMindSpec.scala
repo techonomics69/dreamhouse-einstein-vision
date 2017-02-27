@@ -74,12 +74,12 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
     }
   }
 
-  def withTrainDataset(f: (String) => Any): Unit = {
+  def withTrainDataset(f: (Int, String) => Any): Unit = {
     withDataset { dataset =>
       val name = Random.alphanumeric.take(8).mkString
       val train = await(metaMind.trainDataset(dataset, name))
       val modelId = (train \ "modelId").as[String]
-      f(modelId)
+      f(dataset, modelId)
     }
   }
 
@@ -160,23 +160,27 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
   }
 
   "trainingStatus" must {
-    "work" in withTrainDataset { modelId =>
+    "work" in withTrainDataset { (dataset, modelId) =>
       val status = await(metaMind.trainingStatus(modelId))
       (status \ "modelId").as[String] must equal (modelId)
     }
   }
 
   "allModels" must {
-    "work" in withTrainDataset { modelId =>
-      // todo
-      fail
+    "work" in withTrainDataset { (dataset, modelId) =>
+      val models = await(metaMind.allModels(dataset))
+      models.size must be > 0
     }
   }
 
   "predictWithImage" must {
-    "work" in withTrainDataset { modelId =>
-      // todo
-      fail
+    "work" in {
+      val inputStream = getClass.getResourceAsStream("/" + "cool-cat.jpg")
+      val coolcatSource = StreamConverters.fromInputStream(() => inputStream)
+
+      val result = await(metaMind.predictWithImage("GeneralImageClassifier", "cool-cat.jpg", coolcatSource))
+
+      (result \ "probabilities").as[Seq[JsObject]].size must be > 0
     }
   }
 
