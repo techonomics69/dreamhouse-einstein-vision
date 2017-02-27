@@ -1,0 +1,20 @@
+{
+  "name": "Dreamhouse Einstein Vision",
+  "description": "Classify styles of houses using Einstein Vision",
+  "keywords": [
+    "salesforce",
+    "einstein",
+    "dreamhouse"
+  ],
+  "website": "https://dreamhouseapp.io/",
+  "repository": "https://github.com/dreamhouseapp/dreamhouse-pvs-scala",
+  "env": {
+    "HTTP_SECRET_KEY": {
+      "description": "A secret key for Play Framework's HTTP handling",
+      "generator": "secret"
+    }
+  },
+  "addons": [
+    "einstein-vision:test"
+  ]
+}
