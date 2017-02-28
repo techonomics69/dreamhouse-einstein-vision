@@ -151,6 +151,18 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
     }
   }
 
+  "createDatasetFromZip" must {
+    "work" in {
+      val url = "https://github.com/dreamhouseapp/dreamhouse-pvs-scala/raw/master/test/resources/Cats.zip"
+      val dataset = await(metaMind.createDatasetFromUrl(url, true))
+      (dataset \ "name").as[String] must equal ("Cats")
+
+      val labels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]]
+      labels.size must equal (1)
+      (labels.head \ "name").as[String] must equal ("Cool Cats")
+    }
+  }
+
   "trainDataset" must {
     "work" in withDataset { datasetId =>
       val name = Random.alphanumeric.take(8).mkString

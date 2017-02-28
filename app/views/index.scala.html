@@ -77,6 +77,26 @@
                         </div>
                         <div class="slds-card__footer"></div>
                     </article>
+                    <article class="slds-align--absolute-center">
+                        - or -
+                    </article>
+                    <article  class="slds-card">
+                        <div class="slds-card__header slds-grid" style="padding-top: inherit;"></div>
+                        <div class="slds-card__body">
+                            <form class="slds-form--inline" style="margin-left: 20px;" action="@routes.Application.create()" method="post">
+                                <div class="slds-form-element">
+                                    <label class="slds-form-element__label" for="url">Enter a URL to a zip containing examples:</label>
+                                    <div class="slds-form-element__control">
+                                        <input type="url" id="url" name="url" class="slds-input"/>
+                                    </div>
+                                </div>
+                                <div class="slds-form-element">
+                                    <button type="submit" class="slds-button slds-button--brand">Go!</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="slds-card__footer"></div>
+                    </article>
                 </div>
                 <div class="slds-p-horizontal--small slds-size--1-of-2 slds-medium-size--3-of-6 slds-large-size--6-of-12">
                     <article class="slds-card">

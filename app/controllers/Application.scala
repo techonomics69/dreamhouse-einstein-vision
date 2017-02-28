@@ -25,21 +25,27 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
 
   val datasetName = "Dreamhouse"
 
-  def index = Action.async {
-
-    def getOrCreateDataset = {
-      metaMind.allDatasets.flatMap { jsArray =>
-        val maybeDataset = jsArray.value.find(_.\("name").as[String] == datasetName)
-        maybeDataset.fold {
-          metaMind.createDataset(datasetName)
-        } { jsValue => Future.successful(jsValue.as[JsObject]) }
+  private def getDataset(): Future[JsObject] = {
+    metaMind.allDatasets.flatMap { jsArray =>
+      val maybeDataset = jsArray.value.find(_.\("name").as[String] == datasetName)
+      maybeDataset.fold(Future.failed[JsObject](new Exception(s"Dataset named $datasetName not found"))) { jsValue =>
+        Future.successful(jsValue.as[JsObject])
       }
     }
+  }
 
+  private def getOrCreateDataset(): Future[JsObject] = {
+    getDataset().recoverWith {
+      case _ =>
+        metaMind.createDataset(datasetName)
+    }
+  }
+
+  def index = Action.async {
     for {
-      dataset <- getOrCreateDataset
+      dataset <- getOrCreateDataset()
       datasetId = (dataset \ "id").as[Int]
-      models <- metaMind.allModels(datasetId)
+      models <- metaMind.allModels(datasetId).recover { case _ => Seq.empty[MetaMind.Model] }
     } yield {
       val name = (dataset \ "name").as[String]
       val labels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]].map(_.\("name").as[String])
@@ -74,27 +80,41 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
 
     (maybeFilename, maybeLabel, maybeFilePart) match {
       case (Some(filename), Some(label), Some(filePart)) =>
-        metaMind.allDatasets.flatMap { allDatasets =>
-          val maybeDataset = allDatasets.value.find(_.\("name").as[String] == datasetName)
-          maybeDataset.fold(Future.successful(InternalServerError("Dataset did not exist"))) { dataset =>
-            val datasetId = (dataset \ "id").as[Int]
-            val allLabels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]]
-            val maybeLabel = allLabels.find(_.\("name").as[String] == label)
-            val labelFuture = maybeLabel.fold {
-              metaMind.createLabel(datasetId, label)
-            } { jsValue => Future.successful(jsValue.as[JsObject]) }
+        getDataset().flatMap { dataset =>
+          val datasetId = (dataset \ "id").as[Int]
+          val allLabels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]]
+          val maybeLabel = allLabels.find(_.\("name").as[String] == label)
+          val labelFuture = maybeLabel.fold {
+            metaMind.createLabel(datasetId, label)
+          } { jsValue => Future.successful(jsValue.as[JsObject]) }
 
-            labelFuture.flatMap { label =>
-              val labelId = (label \ "id").as[Int]
-              val fileSource = FileIO.fromPath(filePart.ref.path)
-              metaMind.createExample(datasetId, labelId, filename, fileSource).map { _ =>
-                Ok
-              }
+          labelFuture.flatMap { label =>
+            val labelId = (label \ "id").as[Int]
+            val fileSource = FileIO.fromPath(filePart.ref.path)
+            metaMind.createExample(datasetId, labelId, filename, fileSource).map { _ =>
+              Ok
             }
           }
+        } recover {
+          case e: Exception =>
+            InternalServerError(e.getMessage)
         }
       case _ =>
         Future.successful(BadRequest("Required data was not sent"))
+    }
+  }
+
+  def create = Action(parse.formUrlEncoded).async { request: Request[Map[String, Seq[String]]] =>
+    val maybeUrl = request.body.get("url").flatMap(_.headOption)
+
+    maybeUrl.fold(Future.successful(BadRequest("The url form element was not specified"))) { url =>
+      getDataset().flatMap { dataset =>
+        val datasetId = (dataset \ "id").as[Int]
+        for {
+          _ <- metaMind.deleteDataset(datasetId)
+          newDataset <- metaMind.createDatasetFromUrl(url)
+        } yield Redirect(routes.Application.index())
+      }
     }
   }
 

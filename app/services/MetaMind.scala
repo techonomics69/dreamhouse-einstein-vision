@@ -122,6 +122,16 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
     }
   }
 
+  def createDatasetFromUrl(url: String, sync: Boolean = false): Future[JsObject] = {
+    val pathPart = DataPart("path", url)
+
+    val uploadUrl = s"/vision/datasets/upload" + (if (sync) "/sync" else "")
+
+    ws(uploadUrl)(_.post(Source.single(pathPart))).flatMap(status(Status.OK)).flatMap { json =>
+      json.validate[JsObject].toFuture
+    }
+  }
+
   def trainDataset(dataset: Int, name: String): Future[JsObject] = {
     val formData = Source(List(DataPart("datasetId", dataset.toString), DataPart("name", name)))
     ws("/vision/train")(_.post(formData)).flatMap(status(Status.OK)).flatMap { json =>
