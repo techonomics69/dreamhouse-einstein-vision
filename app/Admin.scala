@@ -4,16 +4,15 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.FileIO
 import com.typesafe.config.ConfigFactory
-import play.api.ApplicationLoader.Context
 import play.api.cache.ehcache.EhCacheComponents
-import play.api.{Configuration, Environment, Mode}
 import play.api.http.{DefaultFileMimeTypes, HttpConfiguration}
 import play.api.inject.{ApplicationLifecycle, DefaultApplicationLifecycle}
 import play.api.libs.ws.ahc.AhcWSClient
+import play.api.{Configuration, Environment, Mode}
 import services.MetaMind
 
-import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
 
 object Admin extends App {
 

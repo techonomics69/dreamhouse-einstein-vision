@@ -1,10 +1,10 @@
 import controllers.AssetsComponents
-import play.api.{Application, ApplicationLoader, BuiltInComponentsFromContext, LoggerConfigurator}
 import play.api.ApplicationLoader.Context
 import play.api.cache.ehcache.EhCacheComponents
 import play.api.libs.ws.ahc.AhcWSComponents
 import play.api.mvc.{DefaultActionBuilder, DefaultControllerComponents, PlayBodyParsers}
 import play.api.routing.Router
+import play.api.{Application, ApplicationLoader, BuiltInComponentsFromContext, LoggerConfigurator}
 import router.Routes
 import services.MetaMind
 

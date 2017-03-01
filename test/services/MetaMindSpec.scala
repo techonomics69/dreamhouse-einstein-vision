@@ -1,26 +1,25 @@
 package services
 
-import java.io.{BufferedReader, File}
-import java.nio.file.Path
+import java.io.File
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
-import akka.util.{ByteString, Timeout}
+import akka.stream.scaladsl.StreamConverters
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatestplus.play.PlaySpec
 import play.api.cache.ehcache.EhCacheComponents
-import play.api.{Configuration, Environment, Mode}
 import play.api.http.{DefaultFileMimeTypes, HttpConfiguration}
 import play.api.inject.{ApplicationLifecycle, DefaultApplicationLifecycle}
 import play.api.libs.json.JsObject
 import play.api.libs.ws.ahc.AhcWSClient
 import play.api.test.Helpers._
+import play.api.{Configuration, Environment, Mode}
 
 import scala.concurrent.ExecutionContext
-import scala.util.Random
 import scala.concurrent.duration._
+import scala.util.Random
 
 class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
 
@@ -151,7 +150,7 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
     }
   }
 
-  "createDatasetFromZip" must {
+  "createDatasetFromUrl" must {
     "work" in {
       val url = "https://github.com/dreamhouseapp/dreamhouse-pvs-scala/raw/master/test/resources/Cats.zip"
       val dataset = await(metaMind.createDatasetFromUrl(url, true))

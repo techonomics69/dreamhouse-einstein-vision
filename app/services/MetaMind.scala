@@ -2,24 +2,23 @@ package services
 
 import java.io.StringReader
 import java.security.KeyPair
+import java.time.OffsetDateTime
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
+import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtJson}
 import play.api.Configuration
-import play.api.cache.{CacheApi, SyncCacheApi}
-import play.api.http.{ContentTypes, FileMimeTypes, HeaderNames, Status}
-import play.api.libs.json.{JsArray, JsObject, JsPath, JsResult, JsResultException, JsValue, Json, JsonValidationError, Reads}
-import play.api.libs.ws.{WSClient, WSRequest, WSResponse}
-import play.api.mvc.{Headers, MultipartFormData}
-import play.api.mvc.MultipartFormData.{BadPart, DataPart, FilePart, Part}
-import play.api.libs.json._
+import play.api.cache.SyncCacheApi
+import play.api.http.{FileMimeTypes, HeaderNames, Status}
 import play.api.libs.functional.syntax._
+import play.api.libs.json.{JsArray, JsObject, JsPath, JsResult, JsResultException, JsValue, JsonValidationError, Reads, _}
+import play.api.libs.ws.{WSClient, WSRequest, WSResponse}
+import play.api.mvc.MultipartFormData.{DataPart, FilePart}
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: FileMimeTypes, cache: SyncCacheApi)(implicit executionContext: ExecutionContext) {
@@ -204,7 +203,7 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
 }
 
 object MetaMind {
-  case class Model(id: String, name: String, status: String, progress: Double, failureMsg: Option[String])
+  case class Model(id: String, name: String, status: String, progress: Double, failureMsg: Option[String], updatedAt: OffsetDateTime)
 
   object Model {
     implicit val jsonReads: Reads[Model] = (
@@ -212,7 +211,9 @@ object MetaMind {
       (__ \ "name").read[String] ~
       (__ \ "status").read[String] ~
       (__ \ "progress").read[Double] ~
-      (__ \ "failureMsg").readNullable[String]
+      (__ \ "failureMsg").readNullable[String] ~
+      (__ \ "updatedAt").read[OffsetDateTime](Reads.offsetDateTimeReads("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
     )(Model.apply _)
   }
+
 }

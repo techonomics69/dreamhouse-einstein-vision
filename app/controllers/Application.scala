@@ -1,22 +1,12 @@
 package controllers
 
-import java.io.File
-import java.nio.file.Path
-
-import akka.NotUsed
-import akka.stream.IOResult
-import akka.stream.scaladsl.{FileIO, Sink, Source}
-import akka.util.ByteString
+import akka.stream.scaladsl.FileIO
 import play.api.libs.Files
 import play.api.libs.json.JsObject
-import play.api.libs.streams.Accumulator
-import play.api.mvc.MultipartFormData.FilePart
-import play.api.mvc.{AbstractController, ActionBuilder, BaseController, Controller, ControllerComponents, DefaultActionBuilder, MultipartFormData, Request}
-import play.core.parsers.Multipart
-import play.core.parsers.Multipart.FileInfo
+import play.api.mvc.{AbstractController, ControllerComponents, MultipartFormData, Request}
 import services.MetaMind
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 
 class Application(metaMind: MetaMind, components: ControllerComponents)(implicit assetsFinder: AssetsFinder) extends AbstractController(components) {
@@ -140,11 +130,24 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
     val maybeFilename = request.body.asFormUrlEncoded.get("filename").flatMap(_.headOption)
     val maybeSampleContent = request.body.file("sampleContent")
 
-    (maybeModelId, maybeFilename, maybeSampleContent) match {
-      case (Some(modelId), Some(filename), Some(sampleContent)) =>
+    (maybeFilename, maybeSampleContent) match {
+      case (Some(filename), Some(sampleContent)) =>
         val fileSource = FileIO.fromPath(sampleContent.ref.path)
-        metaMind.predictWithImage(modelId, filename, fileSource).map { json =>
-          Ok(json)
+
+        val modelIdFuture = maybeModelId.fold {
+          for {
+            dataset <- getOrCreateDataset()
+            datasetId = (dataset \ "id").as[Int]
+            models <- metaMind.allModels(datasetId)
+            sortedModels = models.filter(_.status == "SUCCEEDED").sortBy(_.updatedAt)
+            newestModel <- sortedModels.headOption.fold(Future.failed[MetaMind.Model](new Exception("")))(Future.successful)
+          } yield newestModel.id
+        } (Future.successful)
+
+        modelIdFuture.flatMap { modelId =>
+          metaMind.predictWithImage(modelId, filename, fileSource).map { json =>
+            Ok(json)
+          }
         }
       case _ =>
         Future.successful(BadRequest("Required data was not sent"))
