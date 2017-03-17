@@ -70,6 +70,15 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
     }
   }
 
+  def getDataset(name: String): Future[JsObject] = {
+    allDatasets.flatMap { jsArray =>
+      val maybeDataset = jsArray.value.find(_.\("name").as[String] == name)
+      maybeDataset.fold(Future.failed[JsObject](new Exception(s"Dataset named $name not found"))) { jsValue =>
+        Future.successful(jsValue.as[JsObject])
+      }
+    }
+  }
+
   def createDataset(name: String): Future[JsObject] = {
     val formData = Source.single(DataPart("name", name))
     ws("/vision/datasets")(_.post(formData)).flatMap(status(Status.OK)).flatMap { json =>

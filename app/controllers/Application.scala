@@ -1,31 +1,26 @@
 package controllers
 
-import akka.stream.scaladsl.FileIO
-import play.api.libs.Files
-import play.api.libs.json.JsObject
+import akka.actor.ActorSystem
+import akka.stream.Materializer
+import akka.stream.scaladsl.{Sink, Source}
+import akka.util.ByteString
+import play.api.libs.json.{JsArray, JsObject}
+import play.api.libs.streams.Accumulator
+import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc.{AbstractController, ControllerComponents, MultipartFormData, Request}
+import play.core.parsers.Multipart
+import play.core.parsers.Multipart.FileInfo
 import services.MetaMind
 
 import scala.concurrent.Future
 
 
-class Application(metaMind: MetaMind, components: ControllerComponents)(implicit assetsFinder: AssetsFinder) extends AbstractController(components) {
+class Application(datasetName: String, metaMind: MetaMind, components: ControllerComponents)(implicit assetsFinder: AssetsFinder, actorSystem: ActorSystem, materializer: Materializer) extends AbstractController(components) {
 
-  implicit val executionContext = components.executionContext
-
-  val datasetName = "Dreamhouse"
-
-  private def getDataset(): Future[JsObject] = {
-    metaMind.allDatasets.flatMap { jsArray =>
-      val maybeDataset = jsArray.value.find(_.\("name").as[String] == datasetName)
-      maybeDataset.fold(Future.failed[JsObject](new Exception(s"Dataset named $datasetName not found"))) { jsValue =>
-        Future.successful(jsValue.as[JsObject])
-      }
-    }
-  }
+  private[this] implicit val executionContext = components.executionContext
 
   private def getOrCreateDataset(): Future[JsObject] = {
-    getDataset().recoverWith {
+    metaMind.getDataset(datasetName).recoverWith {
       case _ =>
         metaMind.createDataset(datasetName)
     }
@@ -44,53 +39,45 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
     }
   }
 
-  /*
-  // todo
-  private def handleFilePartAsByteString: Multipart.FilePartHandler[Source[ByteString, Any]] = {
+  // todo: forward the stream to a Source[ByteString]
+  private[controllers] def handleFilePartAsByteString: Multipart.FilePartHandler[ByteString] = {
     case FileInfo(partName, filename, contentType) =>
-      println(partName, filename, contentType)
-      Accumulator.source[ByteString].map { source =>
-        println("source", source)
 
-        val empty = Source.single(ByteString("asdf"))
+      // booo.... drain the whole file to memory
+      val sink = Sink.fold[ByteString, ByteString](ByteString())(_ ++ _)
 
-        val filePart: FilePart[Source[ByteString, Any]] = FilePart(partName, filename, contentType, empty)
-        println("filePart", filePart)
-        filePart
+      Accumulator(sink).map { byteString =>
+        FilePart(partName, filename, contentType, byteString)
       }
   }
-  */
 
-  // todo: don't use temp file
-  // todo: fix race condition with multiple uploads simutansous uploads for a non-existant label
-  def upload = Action(parse.multipartFormData).async { request: Request[MultipartFormData[Files.TemporaryFile]] =>
-    val maybeFilename = request.body.asFormUrlEncoded.get("filename").flatMap(_.headOption)
-    val maybeLabel = request.body.asFormUrlEncoded.get("label").flatMap(_.headOption)
-    val maybeFilePart = request.body.file("image")
+  def upload = Action(parse.multipartFormData(handleFilePartAsByteString)).async { request: Request[MultipartFormData[ByteString]] =>
+    val maybeLabel = request.body.dataParts.get("label").flatMap(_.headOption)
 
-    (maybeFilename, maybeLabel, maybeFilePart) match {
-      case (Some(filename), Some(label), Some(filePart)) =>
-        getDataset().flatMap { dataset =>
-          val datasetId = (dataset \ "id").as[Int]
-          val allLabels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]]
-          val maybeLabel = allLabels.find(_.\("name").as[String] == label)
-          val labelFuture = maybeLabel.fold {
-            metaMind.createLabel(datasetId, label)
-          } { jsValue => Future.successful(jsValue.as[JsObject]) }
+    maybeLabel.fold(Future.successful(BadRequest("Required data was not sent"))) { label =>
+      metaMind.getDataset(datasetName).flatMap { dataset =>
+        val datasetId = (dataset \ "id").as[Int]
+        val allLabels = (dataset \ "labelSummary" \ "labels").as[Seq[JsObject]]
+        val maybeLabel = allLabels.find(_.\("name").as[String] == label)
+        val labelFuture = maybeLabel.fold {
+          metaMind.createLabel(datasetId, label)
+        } { jsValue => Future.successful(jsValue.as[JsObject]) }
 
-          labelFuture.flatMap { label =>
-            val labelId = (label \ "id").as[Int]
-            val fileSource = FileIO.fromPath(filePart.ref.path)
-            metaMind.createExample(datasetId, labelId, filename, fileSource).map { _ =>
-              Ok
-            }
+        labelFuture.flatMap { label =>
+          val labelId = (label \ "id").as[Int]
+
+          val exampleFutures = request.body.files.map { filePart =>
+            metaMind.createExample(datasetId, labelId, filePart.filename, Source.single(filePart.ref))
           }
-        } recover {
-          case e: Exception =>
-            InternalServerError(e.getMessage)
+
+          Future.sequence(exampleFutures).map { results =>
+            Ok(JsArray(results))
+          }
         }
-      case _ =>
-        Future.successful(BadRequest("Required data was not sent"))
+      } recover {
+        case e: Exception =>
+          InternalServerError(e.getMessage)
+      }
     }
   }
 
@@ -98,7 +85,7 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
     val maybeUrl = request.body.get("url").flatMap(_.headOption)
 
     maybeUrl.fold(Future.successful(BadRequest("The url form element was not specified"))) { url =>
-      getDataset().flatMap { dataset =>
+      metaMind.getDataset(datasetName).flatMap { dataset =>
         val datasetId = (dataset \ "id").as[Int]
         for {
           _ <- metaMind.deleteDataset(datasetId)
@@ -125,15 +112,13 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
   }
 
   // todo: don't use a tempfile
-  def predict = Action(parse.multipartFormData).async { request: Request[MultipartFormData[Files.TemporaryFile]] =>
-    val maybeModelId = request.body.asFormUrlEncoded.get("modelId").flatMap(_.headOption)
-    val maybeFilename = request.body.asFormUrlEncoded.get("filename").flatMap(_.headOption)
+  def predict = Action(parse.multipartFormData(handleFilePartAsByteString)).async { request: Request[MultipartFormData[ByteString]] =>
+    val maybeModelId = request.body.dataParts.get("modelId").flatMap(_.headOption)
+    val maybeFilename = request.body.dataParts.get("filename").flatMap(_.headOption)
     val maybeSampleContent = request.body.file("sampleContent")
 
     (maybeFilename, maybeSampleContent) match {
       case (Some(filename), Some(sampleContent)) =>
-        val fileSource = FileIO.fromPath(sampleContent.ref.path)
-
         val modelIdFuture = maybeModelId.fold {
           for {
             dataset <- getOrCreateDataset()
@@ -145,7 +130,7 @@ class Application(metaMind: MetaMind, components: ControllerComponents)(implicit
         } (Future.successful)
 
         modelIdFuture.flatMap { modelId =>
-          metaMind.predictWithImage(modelId, filename, fileSource).map { json =>
+          metaMind.predictWithImage(modelId, filename, Source.single(sampleContent.ref)).map { json =>
             Ok(json)
           }
         }

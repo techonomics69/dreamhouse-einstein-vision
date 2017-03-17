@@ -16,4 +16,4 @@ Run locally:
         export EINSTEIN_VISION_ACCOUNT_ID="YOU@YOUR_EMAIL.COM"
 
 - Run the app: `./sbt ~run`
-- Run the tests: `./snt test`
+- Run the tests: `./sbt test`

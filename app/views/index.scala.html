@@ -11,9 +11,6 @@
 
         <link href="@assets.path("lib/salesforce-ux__design-system/assets/styles/salesforce-lightning-design-system.min.css")" rel="stylesheet" type="text/css"/>
 
-        <script src="@assets.path("lib/vue/dist/vue.js")"></script>
-        <script src="@assets.path("lib/vue-resource/dist/vue-resource.js")"></script>
-
         <style>
             #app {
                 margin-top: 70px;
@@ -38,6 +35,9 @@
                 background-color: blue;
             }
         </style>
+
+        <script src="@assets.path("lib/vue/dist/vue.min.js")"></script>
+        <script src="@assets.path("lib/vue-resource/dist/vue-resource.js")"></script>
     </head>
     <body>
         <header class="slds-global-header_container">
@@ -182,12 +182,12 @@
                 el: '#app',
                 data: {
                     examples_dragdrop: {
-                      state: 'ready',
-                      message: 'Drag & Drop a Directory Here'
+                        state: 'ready',
+                        message: 'Drag & Drop a Directory Here'
                     },
                     tryit_dragdrop: {
-                      state: 'ready',
-                      message: 'Drag & Drop an Image Here'
+                        state: 'ready',
+                        message: 'Drag & Drop an Image Here'
                     },
                     modelId: null
                 },
@@ -222,7 +222,7 @@
             var tryitDropzone = document.getElementById('tryit_dropzone');
 
             examplesDropzone.addEventListener('dragover', function(e) {
-              dropzoneDrag(app.$data.examples_dragdrop, e);
+                dropzoneDrag(app.$data.examples_dragdrop, e);
             });
             tryitDropzone.addEventListener('dragover', function(e) {
                 dropzoneDrag(app.$data.tryit_dragdrop, e);
@@ -250,20 +250,32 @@
                         var reader = entry.createReader();
 
                         reader.readEntries(function(entries) {
-                            entries.forEach(function(fileEntry) {
-                                fileEntry.file(function(file) {
-                                    var formData = new FormData();
-                                    formData.append('label', labelName);
-                                    formData.append('filename', fileEntry.name);
-                                    formData.append('image', file);
+                            var formData = new FormData();
+                            formData.append('label', labelName);
+
+                            var filesToUpload = entries.filter(function(fileEntry) {
+                                return fileEntry.name != ".DS_Store"; // stupid mac
+                            });
+
+                            // possible deadlock
+                            function maybeSend() {
+                                if (formData.getAll("image[]").length == filesToUpload.length) {
                                     var upload = app.$http.post('/upload', formData);
                                     upload.then(function() {
                                         app.$data.examples_dragdrop.state = 'uploaded';
                                         app.$data.examples_dragdrop.message = 'Done uploading';
                                     }, function(error) {
+                                        console.error(error);
                                         app.$data.examples_dragdrop.state = 'error';
                                         app.$data.examples_dragdrop.message = 'Error uploading: ' + error;
                                     });
+                                }
+                            }
+
+                            filesToUpload.forEach(function(fileEntry) {
+                                fileEntry.file(function (file) {
+                                    formData.append("image[]", file);
+                                    maybeSend();
                                 });
                             });
                         });
@@ -307,7 +319,6 @@
                     }
                 }, e);
             });
-
         </script>
     </body>
 </html>
