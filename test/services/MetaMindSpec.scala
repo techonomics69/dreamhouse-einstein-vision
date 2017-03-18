@@ -40,7 +40,7 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
   lazy val fileMimeTypes = new DefaultFileMimeTypes(httpConfiguration.fileMimeTypes)
 
 
-  val cacheComponents = new EhCacheComponents {
+  lazy val cacheComponents = new EhCacheComponents {
     override def environment: Environment = env
 
     override def configuration: Configuration = config
@@ -195,9 +195,18 @@ class MetaMindSpec extends PlaySpec with BeforeAndAfterAll {
     }
   }
 
+  "predictWithUrl" must {
+    "work" in {
+      val result = await(metaMind.predictWithUrl("GeneralImageClassifier", "http://metamind.io/images/546212389.jpg"))
+
+      (result \ "probabilities").as[Seq[JsObject]].size must be > 0
+    }
+  }
+
   override def afterAll {
     wsClient.close()
     actorSystem.terminate()
+    cacheComponents.ehCacheManager.shutdown()
   }
 
 }

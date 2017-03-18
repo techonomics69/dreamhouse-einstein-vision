@@ -7,4 +7,5 @@ POST    /upload                          controllers.Application.upload
 POST    /create                          controllers.Application.create
 GET     /train                           controllers.Application.train
 POST    /predict                         controllers.Application.predict
+POST    /predict-from-url                controllers.Application.predictFromUrl
 GET     /assets/*file                    controllers.AssetsBuilder.versioned(file)

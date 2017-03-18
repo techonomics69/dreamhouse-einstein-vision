@@ -7,7 +7,7 @@ import akka.util.ByteString
 import play.api.libs.json.{JsArray, JsObject}
 import play.api.libs.streams.Accumulator
 import play.api.mvc.MultipartFormData.FilePart
-import play.api.mvc.{AbstractController, ControllerComponents, MultipartFormData, Request}
+import play.api.mvc.{AbstractController, AnyContent, ControllerComponents, MultipartFormData, Request}
 import play.core.parsers.Multipart
 import play.core.parsers.Multipart.FileInfo
 import services.MetaMind
@@ -111,7 +111,6 @@ class Application(datasetName: String, metaMind: MetaMind, components: Controlle
     }
   }
 
-  // todo: don't use a tempfile
   def predict = Action(parse.multipartFormData(handleFilePartAsByteString)).async { request: Request[MultipartFormData[ByteString]] =>
     val maybeModelId = request.body.dataParts.get("modelId").flatMap(_.headOption)
     val maybeFilename = request.body.dataParts.get("filename").flatMap(_.headOption)
@@ -123,10 +122,8 @@ class Application(datasetName: String, metaMind: MetaMind, components: Controlle
           for {
             dataset <- getOrCreateDataset()
             datasetId = (dataset \ "id").as[Int]
-            models <- metaMind.allModels(datasetId)
-            sortedModels = models.filter(_.status == "SUCCEEDED").sortBy(_.updatedAt)
-            newestModel <- sortedModels.headOption.fold(Future.failed[MetaMind.Model](new Exception("")))(Future.successful)
-          } yield newestModel.id
+            modelId <- metaMind.newestModel(datasetId)
+          } yield modelId
         } (Future.successful)
 
         modelIdFuture.flatMap { modelId =>
@@ -136,6 +133,19 @@ class Application(datasetName: String, metaMind: MetaMind, components: Controlle
         }
       case _ =>
         Future.successful(BadRequest("Required data was not sent"))
+    }
+  }
+
+  def predictFromUrl = Action.async { request: Request[AnyContent] =>
+    val maybeSampleLocation = request.getQueryString("sampleLocation")
+
+    maybeSampleLocation.fold(Future.successful(BadRequest("Required sampleLocation parameter"))) { sampleLocation =>
+      for {
+        dataset <- getOrCreateDataset()
+        datasetId = (dataset \ "id").as[Int]
+        modelId <- metaMind.newestModel(datasetId)
+        prediction <- metaMind.predictWithUrl(modelId, sampleLocation)
+      } yield Ok(prediction)
     }
   }
 

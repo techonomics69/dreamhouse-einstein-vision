@@ -9,13 +9,13 @@ import akka.util.ByteString
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{AsyncWordSpec, BeforeAndAfterAll, EitherValues, MustMatchers}
 import play.api.cache.ehcache.EhCacheComponents
-import play.api.http.{DefaultFileMimeTypes, DefaultHttpErrorHandler, HeaderNames, HttpConfiguration, HttpErrorHandler, MimeTypes}
+import play.api.http.{DefaultFileMimeTypes, DefaultHttpErrorHandler, HeaderNames, HttpConfiguration, HttpErrorHandler}
 import play.api.i18n.{DefaultLangsProvider, DefaultMessagesApiProvider, Langs, MessagesApi}
 import play.api.inject.{ApplicationLifecycle, DefaultApplicationLifecycle}
 import play.api.libs.Files.{DefaultTemporaryFileCreator, DefaultTemporaryFileReaper, TemporaryFileCreator, TemporaryFileReaper, TemporaryFileReaperConfiguration}
-import play.api.libs.json.Json
+import play.api.libs.json.{JsArray, Json}
 import play.api.libs.ws.ahc.AhcWSClient
-import play.api.mvc.{AnyContent, BodyParser, DefaultActionBuilder, DefaultControllerComponents, Headers, MultipartFormData, PlayBodyParsers}
+import play.api.mvc.{AnyContent, BodyParser, DefaultActionBuilder, DefaultControllerComponents, MultipartFormData, PlayBodyParsers}
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import play.api.{Configuration, Environment, Mode}
@@ -23,7 +23,7 @@ import play.core.parsers.Multipart
 import play.core.parsers.Multipart.FileInfo
 import services.MetaMind
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.Random
 
 class ApplicationSpec extends AsyncWordSpec with EitherValues with MustMatchers with BeforeAndAfterAll {
@@ -82,7 +82,6 @@ class ApplicationSpec extends AsyncWordSpec with EitherValues with MustMatchers 
 
   lazy val application = new Application(datasetName, metaMind, controllerComponents)(assetFinder, actorSystem, materializer)
 
-  /*
   "index" must {
     "work" in {
       val request = FakeRequest()
@@ -91,67 +90,35 @@ class ApplicationSpec extends AsyncWordSpec with EitherValues with MustMatchers 
       }
     }
   }
-  */
 
   "upload" must {
-    /*
     "work with a FilePart" in {
       val filename = "cool-cat.jpg"
-      val dataParts = Map("filename" -> Seq(filename), "label" -> Seq("cool"))
+      val dataParts = Map("label" -> Seq("cool"))
       val inputStream = getClass.getResourceAsStream("/" + filename)
       val coolcatSource = StreamConverters.fromInputStream(() => inputStream)
       val contentType = fileMimeTypes.forFileName(filename)
-      val files: Seq[MultipartFormData.FilePart[Source[ByteString, Any]]] = Seq(MultipartFormData.FilePart("image", "cool-cat.jpg", contentType, coolcatSource))
-      val body: MultipartFormData[Source[ByteString, Any]] = MultipartFormData(dataParts, files, Seq.empty[MultipartFormData.BadPart])
-      val request = FakeRequest.apply[MultipartFormData[Source[ByteString, Any]]]("POST", "/upload", Headers.create(), body)
-      application.upload(request).flatMap { result =>
-        result.body.consumeData.map { body =>
-          val json = Json.parse(body.toArray)
-          val location = (json \ "location").as[String]
-          val numExamples = (json \ "label" \ "numExamples").as[Int]
+      val contentFuture = coolcatSource.runFold(ByteString())(_ ++ _)
 
-          result.header.status must equal (OK)
-          numExamples must equal (1)
+      contentFuture.flatMap { content =>
+        val files = Seq(MultipartFormData.FilePart("image", "cool-cat.jpg", contentType, content))
+        val body = MultipartFormData(dataParts, files, Seq.empty[MultipartFormData.BadPart])
+        val request = FakeRequest().withBody(body)
 
-          // todo: download location & compare to coolcatSource
+        application.upload(request).flatMap { result =>
+          result.body.consumeData.map { body =>
+            val json = Json.parse(body.toArray).as[JsArray].value.head
+            val location = (json \ "location").as[String]
+            val numExamples = (json \ "label" \ "numExamples").as[Int]
+
+            result.header.status must equal(OK)
+            numExamples must equal(1)
+
+            // todo: download location & compare to coolcatSource
+          }
         }
       }
     }
-    */
-
-    /*
-    todo
-    "work with a dataPart" in {
-      val filename = "cool-cat.jpg"
-      val inputStream = getClass.getResourceAsStream("/" + filename)
-      val coolcatSource = StreamConverters.fromInputStream(() => inputStream)
-      val contentType = fileMimeTypes.forFileName(filename)
-
-      val dataParts = Map("filename" -> Seq(filename), "label" -> Seq("cool"))
-      val emptyFiles = Seq.empty[MultipartFormData.FilePart[Source[ByteString, Any]]]
-      val emptyBadParts = Seq.empty[MultipartFormData.BadPart]
-      val body: MultipartFormData[Source[ByteString, Any]] = MultipartFormData(dataParts, emptyFiles, emptyBadParts)
-      val request = FakeRequest.apply[MultipartFormData[Source[ByteString, Any]]]("POST", "/upload", Headers.create(), body)
-      application.upload(request).flatMap { result =>
-        result.body.consumeData.map { body =>
-          println(body.decodeString("utf-8"))
-
-          result.header.status must equal (OK)
-
-          /*
-          val json = Json.parse(body.toArray)
-          val location = (json \ "location").as[String]
-          val numExamples = (json \ "label" \ "numExamples").as[Int]
-
-
-          numExamples must equal (1)
-          */
-
-          // todo: download location & compare to coolcatSource
-        }
-      }
-    }
-    */
   }
 
   "handleFilePartAsByteString" must {
@@ -227,6 +194,7 @@ class ApplicationSpec extends AsyncWordSpec with EitherValues with MustMatchers 
         metaMind.deleteDataset(id).map { _ =>
           wsClient.close()
           actorSystem.terminate()
+          cacheComponents.ehCacheManager.shutdown()
         }
       }
     }

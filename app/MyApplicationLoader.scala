@@ -4,7 +4,6 @@ import play.api.cache.ehcache.EhCacheComponents
 import play.api.libs.ws.ahc.AhcWSComponents
 import play.api.routing.Router
 import play.api.{Application, ApplicationLoader, BuiltInComponentsFromContext, LoggerConfigurator, NoHttpFiltersComponents}
-import play.filters.HttpFiltersComponents
 import router.Routes
 import services.MetaMind
 

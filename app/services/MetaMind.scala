@@ -159,6 +159,14 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
     }
   }
 
+  def newestModel(datasetId: Int): Future[String] = {
+    for {
+      models <- allModels(datasetId)
+      sortedModels = models.filter(_.status == "SUCCEEDED").sortBy(_.updatedAt)
+      newestModel <- sortedModels.headOption.fold(Future.failed[MetaMind.Model](new Exception("Could not find any models")))(Future.successful)
+    } yield newestModel.id
+  }
+
   def predictWithImage(modelId: String, filename: String, image: Source[ByteString, Any]): Future[JsObject] = {
     val contentType = fileMimeTypes.forFileName(filename)
 
@@ -167,9 +175,21 @@ class MetaMind(configuration: Configuration, wsClient: WSClient, fileMimeTypes: 
     val filePart = FilePart("sampleContent", filename, contentType, image)
 
     val formData = Source(List(modelIdPart, filePart))
-      ws("/vision/predict")(_.post(formData)).flatMap(status(Status.OK)).flatMap { json =>
-        json.validate[JsObject].toFuture
-      }
+
+    ws("/vision/predict")(_.post(formData)).flatMap(status(Status.OK)).flatMap { json =>
+      json.validate[JsObject].toFuture
+    }
+  }
+
+  def predictWithUrl(modelId: String, sampleLocation: String): Future[JsObject] = {
+    val modelIdPart = DataPart("modelId", modelId)
+    val sampleLocationPart = DataPart("sampleLocation", sampleLocation)
+
+    val formData = Source(List(modelIdPart, sampleLocationPart))
+
+    ws("/vision/predict")(_.post(formData)).flatMap(status(Status.OK)).flatMap { json =>
+      json.validate[JsObject].toFuture
+    }
   }
 
   private def ws(path: String)(f: (WSRequest) => Future[WSResponse]): Future[WSResponse] = {
